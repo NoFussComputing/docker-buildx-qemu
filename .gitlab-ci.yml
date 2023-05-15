@@ -1,124 +1,23 @@
-# available variables, do not uncomment all at once.
-# variables:
-#   CI_BUILDX_ARCHS: "linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7"
-#   CI_BUILD_ARM: true
-#   CI_BUILD_ARM64: true
-#   CI_AMD64_DISABLED: true
 
 
-.build:
-  image: docker:dind
-  stage: build
-  services:
-    - name: docker:dind
-      entrypoint: ["env", "-u", "DOCKER_HOST"]
-      command: ["dockerd-entrypoint.sh"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375/
-    DOCKER_DRIVER: overlay2
-    # See https://github.com/docker-library/docker/pull/166
-    DOCKER_TLS_CERTDIR: ""
-  retry: 2
-  before_script:
-    - |
-      if [[ -z "$CI_COMMIT_TAG" ]]; then
-        export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG}
-        export CI_APPLICATION_TAG=${CI_APPLICATION_TAG:-$CI_COMMIT_SHA}
-      else
-        export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$CI_REGISTRY_IMAGE}
-        export CI_APPLICATION_TAG=${CI_APPLICATION_TAG:-$CI_COMMIT_TAG}
-      fi
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+include:
+  - project: nofusscomputing/projects/gitlab-ci
+    ref: development
+    file:
+      - .gitlab-ci_common.yaml
+      - type/docker-image.gitlab-ci.yaml
 
-# these images depend on this repos image 
-# it must exist for for the arch that the gitlab-runner has.
-build:buildx-master:
-  extends: .build
-  # set the image because we are using buildx here.
-  image: $CI_REGISTRY_IMAGE:latest
-  only: 
-    refs:
-      - master
-    variables:
-      - $CI_BUILDX_ARCHS
-  script:
-    # Use docker-container driver to allow useful features (push/multi-platform)
-    - update-binfmts --enable # Important: Ensures execution of other binary formats is enabled in the kernel
-    - docker buildx create --driver docker-container --use
-    - docker buildx inspect --bootstrap
-    - docker buildx ls
-    - docker buildx build --platform $CI_BUILDX_ARCHS --progress plain --pull -t "$CI_REGISTRY_IMAGE" --push .
 
-build:buildx:
-  extends: .build
-  # set the image because we are using buildx here.
-  image: $CI_REGISTRY_IMAGE:latest
-  only:
-    variables:
-      - $CI_BUILDX_ARCHS
-  except:
-    refs:
-       - master
-  script:
-    - update-binfmts --enable # Important: Ensures execution of other binary formats is enabled in the kernel
-    - docker buildx create --driver docker-container --use
-    - docker buildx inspect --bootstrap
-    - docker buildx ls
-    - docker buildx build --platform $CI_BUILDX_ARCHS --progress plain --pull -t "$CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG" --push .
+variables:
+  MY_PROJECT_ID: "45926238"
 
-# disable build:armv7 for now since it seems to have an issue with dind
-.build:arm:
-  extends: .build
-  only:
-    variables:
-      - $CI_BUILD_ARM
-  except:
-    variables:
-      - $CI_BUILDX_ARCHS
-  tags:
-    - arm
-  script:
-    - docker build -t "$CI_APPLICATION_REPOSITORY/arm:$CI_APPLICATION_TAG" .
-    - docker push "$CI_APPLICATION_REPOSITORY/arm:$CI_APPLICATION_TAG"
+  GIT_SYNC_URL: "https://$GITHUB_USERNAME_ROBOT:$GITHUB_TOKEN_ROBOT@github.com/NoFussComputing/docker-buildx-qemu.git"
 
-build:arm64:
-  extends: .build
-  only:
-    variables:
-      - $CI_BUILD_ARM64
-  except:
-    variables:
-      - $CI_BUILDX_ARCHS
-  tags:
-    - arm64
+  #JOB_STOP_CONVENTIONAL_COMMITS: 'disable for testing'
+  #JOB_STOP_GIT_PUSH_MIRROR: 'disable for testing'
+  #JOB_STOP_GITLAB_RELEASE: 'disable for testing'
 
-  script:
-    - docker build -t "$CI_APPLICATION_REPOSITORY/arm64:$CI_APPLICATION_TAG" .
-    - docker push "$CI_APPLICATION_REPOSITORY/arm64:$CI_APPLICATION_TAG"
-
-#  builds this by default
-build:amd64:
-  extends: .build
-  except:
-    variables:
-      - $CI_AMD64_DISABLED
-      - $CI_BUILDX_ARCHS
-  script:
-    - docker build -t "$CI_APPLICATION_REPOSITORY/amd64:$CI_APPLICATION_TAG" .
-    - docker push "$CI_APPLICATION_REPOSITORY/amd64:$CI_APPLICATION_TAG"  
-
-build:manifest:
-  extends: .build
-  stage: deploy
-  except:
-    variables:
-      - $CI_BUILDX_ARCHS
-  script:
-    - echo "Checking amd86 build..." && [[ -z $CI_AMD64_DISABLED ]] && echo "found" && export CI_MANIFEST_LIST="$CI_APPLICATION_REPOSITORY/amd64:$CI_APPLICATION_TAG"
-    - echo "Checking arm build..." && [[ $CI_BUILD_ARM ]] && echo "found" && export CI_MANIFEST_LIST="$CI_MANIFEST_LIST $CI_APPLICATION_REPOSITORY/arm:$CI_APPLICATION_TAG"
-    - echo "Checking arm64 build..." && [[ $CI_BUILD_ARM64 ]] && echo "found" && export CI_MANIFEST_LIST="$CI_MANIFEST_LIST $CI_APPLICATION_REPOSITORY/arm64:$CI_APPLICATION_TAG"
-    - export DOCKER_CLI_EXPERIMENTAL=enabled
-    - echo $CI_MANIFEST_LIST
-    - docker manifest create $CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG $CI_MANIFEST_LIST && docker manifest push $CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG
-    - docker manifest create $CI_APPLICATION_REPOSITORY:latest $CI_MANIFEST_LIST && docker manifest push $CI_APPLICATION_REPOSITORY:latest
-    - echo "Checking master" && [[ $CI_COMMIT_REF_NAME == "master" ]] && docker manifest create $CI_REGISTRY_IMAGE:latest $CI_MANIFEST_LIST && docker manifest push $CI_REGISTRY_IMAGE:latest
+  DOCKER_IMAGE_BUILD_TARGET_PLATFORMS: "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/arm64,linux/386,linux/arm/v7,linux/arm/v6"
+  DOCKER_IMAGE_PUBLISH_NAME: $CI_PROJECT_NAME
+  DOCKER_IMAGE_PUBLISH_REGISTRY: docker.io/nofusscomputing
+  DOCKER_IMAGE_PUBLISH_URL: https://hub.docker.com/r/nofusscomputing/$DOCKER_IMAGE_PUBLISH_NAME
