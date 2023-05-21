@@ -5,7 +5,7 @@ include:
     ref: development
     file:
       - .gitlab-ci_common.yaml
-      - type/docker-image.gitlab-ci.yaml
+      - template/docker-image.gitlab-ci.yaml
 
 
 variables:
@@ -17,7 +17,14 @@ variables:
   #JOB_STOP_GIT_PUSH_MIRROR: 'disable for testing'
   #JOB_STOP_GITLAB_RELEASE: 'disable for testing'
 
-  DOCKER_IMAGE_BUILD_TARGET_PLATFORMS: "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/arm64,linux/386,linux/arm/v7,linux/arm/v6"
+  DOCKER_IMAGE_BUILD_TARGET_PLATFORMS: "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/arm64,linux/arm/v7"
+    # Package docker-ce-cli is not available for:
+    #   - linux/arm/v6
+    #   - linux/386
   DOCKER_IMAGE_PUBLISH_NAME: $CI_PROJECT_NAME
   DOCKER_IMAGE_PUBLISH_REGISTRY: docker.io/nofusscomputing
   DOCKER_IMAGE_PUBLISH_URL: https://hub.docker.com/r/nofusscomputing/$DOCKER_IMAGE_PUBLISH_NAME
+
+
+
+
