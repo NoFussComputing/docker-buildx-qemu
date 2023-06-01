@@ -5,7 +5,7 @@ include:
     ref: development
     file:
       - .gitlab-ci_common.yaml
-      - template/docker-image.gitlab-ci.yaml
+      - template/automagic.gitlab-ci.yaml
 
 
 variables:
